@@ -8,7 +8,7 @@ This project aims to develop a link analysis and availability framework to evalu
 The resulting link characterization will drive hardware selection and mission design parameters. 
 
 ## Mission Parameters Addressed
-The link analysis investigates and trades the following parameters critical for end-to-end performacne.
+The link analysis investigates and trades the following parameters critical for end-to-end performance.
 - Freq Selection
 - Data rate and Bandwidth
 - Antenna and Aperture Sizing
