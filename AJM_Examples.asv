@@ -1,0 +1,95 @@
+%% AJM_Sidelobe_Jamming_Study.m
+% Anti-Jam margin vs. sidelobe control + coded BER vs. J/S (DSSS)
+% Aaron Smith — configurable, no special toolboxes required.
+%
+% Updated: Array is designed to operate at f0 = 20.2 GHz.
+
+clear; clc;
+
+%% USER PARAMETERS
+% Waveform / coding
+Rb              = 2e3;          % data rate [bps]
+Bspread         = 20e6;         % DSSS spread BW [Hz]
+PG_dB           = 10*log10(Bspread/Rb); % Processing gain [dB] (expect ~40 dB)
+EbN0_req_unc_dB = 7;            % Uncoded BPSK operating point (target BER)
+CG_dB           = 5;            % Effective coding gain for r=1/2 FEC (set 3..6 dB)
+EbN0_req_dB     = EbN0_req_unc_dB - CG_dB; % Coded threshold [dB]
+
+% Jammer types (choose which to include in plots)
+jammerTypes     = { 'tone', 'partial', 'barrage' }; % any subset of {'tone','partial','barrage'}
+rho_partial     = 0.2;          % Partial-band fraction ρ (0<ρ≤1)
+
+% Array geometry
+Nx = 32; Ny = 32;              % elements in x and y
+f0 = 20.2e9;                    % operating frequency [Hz]
+c  = 3e8;                       % speed of light [m/s]
+lambda = c/f0;                  % wavelength [m]
+k = 2*pi/lambda;                % wavenumber
+d = 0.5*lambda;                 % inter-element spacing (λ/2)
+
+% Look and jammer angles (degrees)
+look_theta_deg  = 0;            % boresight
+look_phi_deg    = 0;            % irrelevant at boresight
+jam_theta_deg   = 10;           % jammer elevation off-boresight (choose near first SL)
+jam_phi_deg     = 0;            % jammer azimuth
+
+% Tapers to evaluate (struct array)
+TAPERS = [ ...
+    taperSpec('Uniform', 'uniform',      struct()) , ...
+    taperSpec('Taylor -25 dB', 'taylor', struct('SLL_dB',-25,'nbar',4)), ...
+    taperSpec('Chebyshev -30 dB','cheby',struct('R_dB',30)), ...
+    taperSpec('Chebyshev -40 dB','cheby',struct('R_dB',40)) ...
+];
+
+% BER curve sweep (jam-limited; J/S at aperture)
+JS_ap_dB_sweep  = linspace(20, 90, 300);  % dB range for plotting
+
+%% PRECOMPUTE STEERING VECTORS
+[xGrid,yGrid] = elementGrid(Nx,Ny,d);     % element coordinates
+abore = steeringVec(look_theta_deg,look_phi_deg,xGrid,yGrid,k);
+ajam  = steeringVec(jam_theta_deg,jam_phi_deg,xGrid,yGrid,k);
+
+%%
+%% MAIN LOOP — compute ΔG, AJM0, and J/S thresholds for each taper
+results = struct([]);
+for i=1:numel(TAPERS)
+    tw = make2DTaper(TAPERS(i),Nx,Ny);  % amplitude weights (Ny×Nx)
+    w  = normalizeWeights(tw);          % vectorized, unit-norm
+
+    % Gains (power) at boresight and jammer directions
+    Gbore_dB = 10*log10(abs(w'*abore)^2);
+    Gjam_dB  = 10*log10(abs(w'*ajam )^2);
+    % Normalize so boresight = 0 dB; ΔG >= 0
+    DeltaG_dB = Gbore_dB - Gjam_dB;     % mainlobe - jammer gain gap (dB)
+
+    % Collect per-jammer-type metrics
+    jt = struct();
+    for t = 1:numel(jammerTypes)
+        jtname = jammerTypes{t};
+        delta_type_dB = jammerPenalty(jtname, rho_partial); % δ_type
+        % Aperture J/S required to break (threshold)
+        JS_ap_req_dB = PG_dB + delta_type_dB - EbN0_req_dB + DeltaG_dB;
+        % Anti-jam margin at J/S_ap = 0
+        AJM0_dB = PG_dB + delta_type_dB - EbN0_req_dB + DeltaG_dB;
+        jt.(jtname).JS_ap_req_dB = JS_ap_req_dB;
+        jt.(jtname).AJM0_dB      = AJM0_dB;
+    end
+
+    results(i).name      = TAPERS(i).name;
+    results(i).DeltaG_dB = DeltaG_dB;
+    results(i).perType   = jt;
+end
+
+%% DISPLAY TABLE OF THRESHOLDS (Command Window)
+fprintf('\n--- Required J/S_aperture (dB) to break link (Eb/N0_req_coded = %.1f dB, PG=%.1f dB, f0=%.2f GHz) ---\n', EbN0_req_dB, PG_dB, f0/1e9);
+header = sprintf('%-18s  ΔG  |  Tone   Partial(ρ=%.2f)  Barrage\n', rho_partial);
+fprintf(header);
+fprintf(repmat('-',1,72)); fprintf('\n');
+for i=1:numel(results)
+    r = results(i);
+    line = sprintf('%-18s %5.1f | %6.1f   %12.1f   %7.1f\n', r.name, r.DeltaG_dB, ...
+        r.perType.tone.JS_ap_req_dB, r.perType.partial.JS_ap_req_dB, r.perType.barrage.JS_ap_req_dB);
+    fprintf('%s', line);
+end
+
+%% (rest of plotting and helper functions remain unchanged)

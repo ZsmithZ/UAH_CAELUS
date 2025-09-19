@@ -1,0 +1,25 @@
+% =========================================================================
+% DigiSim Main Function
+% =========================================================================
+% Author:           Aaron Smith
+% Organization:     Northrop Grumman PGS SSL
+% Created:          12-31-2024
+% Last Updated:     12-31-2024
+% MATLAB Version:   24.1.0.2568132 (R2024a) Update 1
+% 
+% Description:
+% This script performs [briefly describe the script's purpose and functionality].
+% It includes data preprocessing, analysis, and result visualization steps.
+%
+% Inputs:
+% - [Input Description, e.g., Input data files or parameters]
+%
+% Outputs:
+% - [Output Description, e.g., Visualizations, processed data, etc.]
+%
+% Dependencies:
+% - [List of required functions, toolboxes, or external files]
+% =========================================================================
+
+
+ 

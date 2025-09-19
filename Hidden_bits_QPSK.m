@@ -1,0 +1,100 @@
+% MATLAB Simulation of Hidden Bit Encoding in QPSK
+% Simulates three methods: Phase Perturbation, Power Level Encoding, and Differential Phase Shift
+
+clear; clc; close all;
+tic
+%% Simulation Parameters
+N = 1e5; % Number of symbols
+EbN0_dB = 0:2:20; % SNR range in dB
+M = 4; % QPSK
+
+% Phase Perturbation Parameters
+delta_theta = pi/36; % Small phase perturbation
+
+% Power Level Encoding Parameters
+delta_A = 0.05; % Small amplitude variation
+
+% Differential Phase Shift Parameters
+delta_phi = pi/36;
+
+% Adjustable Parameters
+operating_frequency = 8.2e9; % Operating frequency in Hz (e.g., 2.4 GHz)
+channel_bandwidth = 100e6; % Channel bandwidth in Hz (e.g., 20 MHz)
+FEC_coding_rate = 3/4; % Forward Error Correction rate
+
+% Compute Spectral Efficiency
+modulation_order = log2(M); % Bits per symbol
+spectral_efficiency = (modulation_order * FEC_coding_rate) / (channel_bandwidth/1e6); % bps/Hz
+
+BER_standard = zeros(size(EbN0_dB));
+BER_hidden_phase = zeros(size(EbN0_dB));
+BER_hidden_power = zeros(size(EbN0_dB));
+BER_hidden_diff = zeros(size(EbN0_dB));
+
+for i = 1:length(EbN0_dB)
+    EbN0 = 10^(EbN0_dB(i)/10);
+    noise_var = 1/(4*EbN0);
+    
+    %% Standard QPSK Modulation
+    bits = randi([0 1], N*2, 1); 
+    symbols = (1-2*bits(1:2:end)) + 1j*(1-2*bits(2:2:end));
+    symbols = symbols / sqrt(2);
+    
+    %% Phase Perturbation Encoding
+    hidden_bits_phase = randi([0 1], N, 1);
+    perturbation = (hidden_bits_phase * 2 - 1) * delta_theta;
+    symbols_phase = symbols .* exp(1j * perturbation);
+    
+    %% Power Level Encoding
+    hidden_bits_power = randi([0 1], N, 1);
+    amplitude_variation = 1 + (hidden_bits_power * 2 - 1) * delta_A;
+    symbols_power = symbols .* amplitude_variation;
+    
+    %% Differential Phase Shift Encoding
+    hidden_bits_diff = randi([0 1], N, 1);
+    diff_shift = (hidden_bits_diff * 2 - 1) * delta_phi;
+    symbols_diff = symbols .* exp(1j * diff_shift);
+    
+    %% Add Noise
+    noise = sqrt(noise_var) * (randn(N, 1) + 1j * randn(N, 1));
+    received_standard = symbols + noise;
+    received_phase = symbols_phase + noise;
+    received_power = symbols_power + noise;
+    received_diff = symbols_diff + noise;
+end
+
+%% Plot I/Q Constellation with EVM Calculation
+figure;
+scatter(real(received_standard(1:1000)), imag(received_standard(1:1000)), 'k.'); hold on;
+scatter(real(received_phase(1:1000)), imag(received_phase(1:1000)), 'r.');
+scatter(real(received_power(1:1000)), imag(received_power(1:1000)), 'b.');
+scatter(real(received_diff(1:1000)), imag(received_diff(1:1000)), 'g.');
+grid on;
+legend('Standard QPSK', 'Phase Perturbation', 'Power Encoding', 'Differential Shift');
+title('I/Q Constellation Diagram');
+xlabel('In-Phase'); ylabel('Quadrature');
+
+% Compute EVM
+EVM_standard = sqrt(mean(abs(received_standard - symbols).^2)) / mean(abs(symbols)) * 100;
+EVM_phase = sqrt(mean(abs(received_phase - symbols).^2)) / mean(abs(symbols)) * 100;
+EVM_power = sqrt(mean(abs(received_power - symbols).^2)) / mean(abs(symbols)) * 100;
+EVM_diff = sqrt(mean(abs(received_diff - symbols).^2)) / mean(abs(symbols)) * 100;
+
+%% Display Spectral Efficiency
+fprintf('Operating Frequency: %.2f GHz\n', operating_frequency/1e9);
+fprintf('Channel Bandwidth: %.2f MHz\n', channel_bandwidth/1e6);
+fprintf('FEC Coding Rate: %.2f\n', FEC_coding_rate);
+fprintf('Spectral Efficiency: %.2f bps/Hz\n', spectral_efficiency);
+
+%% Compute and Plot PSD
+figure;
+pwelch(received_standard, [], [], [], 'centered'); hold on;
+pwelch(received_phase, [], [], [], 'centered');
+pwelch(received_power, [], [], [], 'centered');
+pwelch(received_diff, [], [], [], 'centered');
+grid on;
+legend('Standard QPSK', 'Phase Perturbation', 'Power Encoding', 'Differential Shift');
+title('Power Spectral Density (PSD)');
+xlabel('Frequency'); ylabel('Power/Frequency (dB/Hz)');
+
+toc
